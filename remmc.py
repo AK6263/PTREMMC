@@ -2,25 +2,33 @@ import numpy as np
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 import seaborn as sns
+import sys
+
 # TODO: Vectorize this function
 def U(x): return (x-1)**2 * (x+1)**2 + minima_diff*x
-# def U(x): return (x)**2  *(x-3)**2 * (x+3)**2 + minima_diff*x
+
 def boltzman(E_next, E_i, betas): return np.exp(-(E_next - E_i)*betas)
 
 def replica_exchange(x, E_i, betas, replica_index):
-    p_exchange = np.exp((E_i[:-1] - E_i[1:])*(betas[:-1] - betas[1:]))
-    p_exchange = np.min([np.ones(p_exchange.shape), p_exchange], axis=0)
-
-    for i in range(len(p_exchange)):
+    n = len(x)
+    first_skip = np.random.random()
+    if first_skip >= 0.5:
+        # Skipp the first replica and move on to another
+        exchange_partners = [[i, i+1] for i in range(1, n-1, 2)] # The indices of exchange partners
+        p_exchange = boltzman(E_i[2:n:2], E_i[1:n-1:2], betas[1:n-1:2] - betas[2:n:2])
+    else:
+        exchange_partners = [[i, i+1] for i in range(0, n-1, 2)]
+        p_exchange = boltzman(E_i[1::2], E_i[:n-1:2], betas[:n-1:2] - betas[1::2])
+    for i in range(len(exchange_partners)):
         if p_exchange[i] >= P_EXCHANGE:
-            x[i], x[i+1] = x[i+1], x[i]
-            replica_index[i], replica_index[i+1] = replica_index[i+1], replica_index[i]
-
+            (a, b) = exchange_partners[i]
+            x[a], x[b] = x[b], x[a]
+            replica_index[a], replica_index[b] = replica_index[b], replica_index[a]
     return x, replica_index
 
-del_q = 0.3
+del_q = 0.5
 displacement = [-del_q, del_q]
-betas = np.array([ 4, 3, 2, 1])
+betas = np.array([8, 7, 6, 5, 4, 3, 2, 1])
 timesteps = 5e7
 initial_interval = [-1.8, 1.8]
 eq_timesteps = 1e5
@@ -34,7 +42,7 @@ def MMC(x_i, timesteps, betas, block):
     t = 0
     n_replica = len(betas) # 
     acc = np.zeros(n_replica)
-    rep_index = np.arange(1, n_replica+1)
+    rep_index = np.arange(0, n_replica)
     traj = np.zeros((timesteps, n_replica))
     energy = np.zeros((timesteps, n_replica))
     replica_indices = np.zeros([timesteps, n_replica])
@@ -43,60 +51,58 @@ def MMC(x_i, timesteps, betas, block):
     replica_indices[0] = rep_index
 
     pbar = tqdm(total=timesteps)
-    
     while t < timesteps - 1:
         t += 1
-        pbar.update(1)
-        E_i = U(x_i)
-        if t % block == 0:
-            x_i, rep_index = replica_exchange(x_i, E_i, betas, rep_index)
         
-        x_next = x_i + np.random.uniform(*displacement, size=n_replica)
-        E_next = U(x_next)
+        if t % block != 0: # True if its not 0
+            E_i = U(x_i)
+            x_next = x_i + np.random.uniform(*displacement, size=n_replica)
+            E_next = U(x_next)
 
-        boltzman_dist = boltzman(E_next, E_i, betas)
-        a = np.random.uniform(0, 1, size=n_replica)
-
-        # TODO: Vectorize this 
-        for i in range(n_replica):
-            if E_next[i] <= E_i[i]: # Within Acceptance Ratio
-                x_i[i] = x_next[i]
-                acc[i] += 1
-            else:
-                a = np.random.uniform(0, 1)
-                if boltzman_dist[i] > a: # Criterion
+            boltzman_dist = boltzman(E_next, E_i, betas)
+            
+            for i in range(n_replica):
+                if E_next[i] <= E_i[i]:
                     x_i[i] = x_next[i]
                     acc[i] += 1
-        
+                else:
+                    a = np.random.uniform(0, 1)
+                    if boltzman_dist[i]>a:
+                        x_i[i] = x_next[i]
+                        acc[i] += 1
+            energy[t] = U(x_i)
+            traj[t] = x_i
+            replica_indices[t] = rep_index
+        else:
+            x_i, rep_index = replica_exchange(x_i, U(x_i), betas, rep_index)
         energy[t] = U(x_i)
         traj[t] = x_i
         replica_indices[t] = rep_index
+
     pbar.close()
     return traj, energy, acc, replica_indices
 
-
-timesteps = 1000
-traj, energy, acc, replica_indices = MMC(x_0, timesteps, betas, 100)
-
+timesteps = 5000
+traj, energy, acc, replica_indices = MMC(x_0, timesteps, betas, 200)
 
 print(f"Acceptance Ratio {max(acc)/timesteps}")
 
-# x = np.linspace(*initial_interval, timesteps)
-# y = U(x)
-# plt.figure(1)
-# plt.plot(x, y)
+x = np.linspace(*initial_interval, num=timesteps)
+y = U(x)
+plt.figure(1)
+plt.plot(x, y)
+plt.figure(2)
+sns.displot(traj, kind='kde', label=betas)
 
-# for i in range(len(betas)):
-# sns.displot(traj, kind='kde', label=betas)
+plt.figure(3)
+for i in range(len(betas)):
+    plt.subplot(2, 4, i+1)
+    plt.plot(traj[:, i], energy[:, i], label=betas)
 
-# plt.figure(2)
-# for i in range(len(betas)):
-#     plt.subplot(2, 4, i+1)
-#     plt.plot(traj[:, i], energy[:, i], label=betas)
-# plt.legend()
-
-# plt.figure(3)
-# for i in range(len(betas)):
-#     plt.subplot(2, 2, i+1)
-#     plt.plot(replica_indices[:, i], label=betas[i])
-# plt.show()
+plt.figure(4)
+for i in range(len(betas)):
+    plt.subplot(2, int(np.ceil(len(betas)/2)), i+1)
+    inds = [np.where(j == i)[0] for j in replica_indices]
+    plt.plot(inds, label=betas[i])
+    plt.ylim([0, 8])
+plt.show()
