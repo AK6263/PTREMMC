@@ -36,7 +36,6 @@ initial_interval = [-1.8, 1.8]
 eq_timesteps = 1e5
 minima_diff = .6
 P_EXCHANGE = .5 # p_exchange cutoff. Exchange happens when the prob is higher
-
 # Initialization
 x_0 = np.random.uniform(*initial_interval, size=len(betas))
 
