@@ -10,7 +10,7 @@ def plot_trajectory(U, initial_interval, timesteps,
     plt.figure(1)
     ax = plt.subplot(1, 2, 1)
     ax.plot(x, y)
-    ax = plt.subplot(1, traj,2, 2)
+    ax = plt.subplot(1, 2, 2)
     sns.kdeplot(energy, label=betas, ax=ax)
 
     plt.figure(2)

@@ -28,17 +28,6 @@ def replica_exchange(x, E_i, betas, replica_index):
             replica_index[a], replica_index[b] = replica_index[b], replica_index[a]
     return x, replica_index
 
-del_q = .5
-displacement = [-del_q, del_q]
-betas = np.array([4, 2.59, 1.25, .5])
-timesteps = 5e7
-initial_interval = [-1.8, 1.8]
-eq_timesteps = 1e5
-minima_diff = .6
-P_EXCHANGE = .5 # p_exchange cutoff. Exchange happens when the prob is higher
-# Initialization
-x_0 = np.random.uniform(*initial_interval, size=len(betas))
-
 def MMC(x_i, timesteps, betas, block):
     t = 0
     n_replica = len(betas) #
@@ -83,9 +72,19 @@ def MMC(x_i, timesteps, betas, block):
     pbar.close()
     return traj, energy, acc, replica_indices
 
-timesteps = 10000
-exchange_step = 500
-plotter = False
+del_q = .9
+displacement = [-del_q, del_q]
+betas = np.array([4, 2.5, .5])
+initial_interval = [-1.8, 1.8]
+minima_diff = .1
+P_EXCHANGE = .2 # p_exchange cutoff. Exchange happens when the prob is higher
+# Initialization
+x_0 = np.random.uniform(*initial_interval, size=len(betas))
+
+timesteps = int(sys.argv[1])
+exchange_step = int(sys.argv[2])
+plotter = True if sys.argv[3] == "True" else False
+
 traj, energy, acc, replica_indices = MMC(x_0, timesteps, betas, exchange_step)
 
 save_file = {
@@ -94,10 +93,9 @@ save_file = {
     "replica_indices": replica_indices,
     "exchange_step": exchange_step
 }
-np.savez(f"out/ts_{timesteps}.npz,_blocl", **save_file)
-
+np.savez(f"out/ts_{timesteps}.npz", **save_file)
+print(acc)
 print(f"Acceptance Ratio {max(acc)/timesteps}")
-plt.hist(energy.T[:, :100])
-plt.show()
+
 if plotter:
     plot_trajectory(U, initial_interval, timesteps, traj, energy, betas, replica_indices)
